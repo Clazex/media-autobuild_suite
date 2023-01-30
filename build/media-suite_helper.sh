@@ -802,41 +802,45 @@ do_getFFmpegConfig() {
     # we set these accordingly for static or shared
     do_removeOption "--(en|dis)able-(shared|static)"
 
-    # OK to use GnuTLS for rtmpdump if not nonfree since GnuTLS was built for rtmpdump anyway
-    # If nonfree will use SChannel if neither openssl/libtls or gnutls are in the options
-    if ! enabled_any libtls openssl gnutls &&
-        { enabled librtmp || [[ $rtmpdump == y ]]; }; then
-        if [[ $license == nonfree ]] ||
-            [[ $license == lgpl* && $rtmpdump == n ]]; then
-            do_addOption --enable-openssl
-        else
+    if ! disabled network; then
+        # OK to use GnuTLS for rtmpdump if not nonfree since GnuTLS was built for rtmpdump anyway
+        # If nonfree will use SChannel if neither openssl/libtls or gnutls are in the options
+        if ! enabled_any libtls openssl gnutls &&
+            { enabled librtmp || [[ $rtmpdump == y ]]; }; then
+            if [[ $license == nonfree ]] ||
+                [[ $license == lgpl* && $rtmpdump == n ]]; then
+                do_addOption --enable-openssl
+            else
+                do_addOption --enable-gnutls
+            fi
+            do_removeOption "--enable-(gmp|gcrypt|mbedtls)"
+        fi
+
+        local _all_tls="--enable-(mbedtls|gnutls|openssl|libtls|schannel)"
+        if enabled_any libtls openssl && [[ $license != gpl* ]]; then
+            # prefer openssl/libtls if both are in options and not gpl
+
+            # prefer openssl over libtls if both enabled
+            local _prefer=libtls
+            if enabled openssl; then
+                _prefer=openssl
+            fi
+
+            do_removeOption "${_all_tls}"
+            do_addOption "--enable-${_prefer}"
+        elif enabled mbedtls; then
+            # prefer mbedtls if any other tls libs are enabled and gpl
+            do_removeOption "${_all_tls}"
+            do_addOption --enable-mbedtls
+        elif enabled gnutls; then
+            do_removeOption "${_all_tls}"
             do_addOption --enable-gnutls
+        elif ! disabled schannel; then
+            # fallback to schannel if no other tls libs are enabled
+            do_addOption --enable-schannel
         fi
-        do_removeOption "--enable-(gmp|gcrypt|mbedtls)"
-    fi
-
-    local _all_tls="--enable-(mbedtls|gnutls|openssl|libtls|schannel)"
-    if enabled_any libtls openssl && [[ $license != gpl* ]]; then
-        # prefer openssl/libtls if both are in options and not gpl
-
-        # prefer openssl over libtls if both enabled
-        local _prefer=libtls
-        if enabled openssl; then
-            _prefer=openssl
-        fi
-
+    else
         do_removeOption "${_all_tls}"
-        do_addOption "--enable-${_prefer}"
-    elif enabled mbedtls; then
-        # prefer mbedtls if any other tls libs are enabled and gpl
-        do_removeOption "${_all_tls}"
-        do_addOption --enable-mbedtls
-    elif enabled gnutls; then
-        do_removeOption "${_all_tls}"
-        do_addOption --enable-gnutls
-    elif ! disabled schannel; then
-        # fallback to schannel if no other tls libs are enabled
-        do_addOption --enable-schannel
     fi
 
     enabled_any lib{vo-aacenc,aacplus,utvideo,dcadec,faac,ebur128,ndi_newtek,ndi-newtek,ssh,wavpack} netcdf &&
